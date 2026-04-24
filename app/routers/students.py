@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select
 from datetime import date
+
 from app.database import get_session
 from app.models.student import Student
-from app.models.team import Team   # To verify teacher exists
+from app.models.team import Team
 from app.schemas.student import StudentCreate, StudentRead
 from app.models.enums import LevelCode, HouseName
+from app.services.student_id_generator import generate_student_id
+from app.schemas.student_with_teacher import StudentReadWithTeacher
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
@@ -19,33 +22,31 @@ LEVEL_TO_HOUSE = {
 
 @router.post("/", response_model=StudentRead)
 def create_student(student_data: StudentCreate, session: Session = Depends(get_session)):
-    # 1. Check if homeroom_teacher_id points to a valid teacher (if provided)
-    if student_data.homeroom_teacher_id:
+    # 1. Validate homeroom teacher if provided
+    if student_data.homeroom_teacher_id is not None:
         teacher = session.get(Team, student_data.homeroom_teacher_id)
-        if not teacher or teacher.role != "teacher":
-            raise HTTPException(status_code=400, detail="Invalid homeroom teacher ID")
+        if not teacher:
+            raise HTTPException(status_code=400, detail="Homeroom teacher not found")
+        if teacher.role != "teacher":
+            raise HTTPException(status_code=400, detail="Assigned staff member is not a teacher")
 
-    # 2. Determine next sequential number for this level + enrollment_year
-    existing_count = session.exec(
-        select(func.count()).select_from(Student).where(
-            Student.level == student_data.level,
-            Student.enrollment_year == student_data.enrollment_year
-        )
-    ).one()
-    sequential = f"{existing_count + 1:03d}"
+    # 2. Generate student_id (uses session to count existing students)
+    student_id = generate_student_id(
+        session,
+        student_data.level,
+        student_data.section,
+        student_data.enrollment_year
+    )
 
-    # 3. Build the student_id
-    student_id = f"OS-{sequential}-{student_data.level.value}-{student_data.section.value}-{student_data.enrollment_year}"
-
-    # 4. Compute age in months
+    # 3. Compute age in months
     today = date.today()
     dob = student_data.date_of_birth
     age_months = (today.year - dob.year) * 12 + (today.month - dob.month)
 
-    # 5. Assign house based on level
+    # 4. Assign house based on level
     house = LEVEL_TO_HOUSE[student_data.level]
 
-    # 6. Create Student instance
+    # 5. Create Student instance
     student = Student(
         **student_data.dict(),
         student_id=student_id,
@@ -68,3 +69,10 @@ def get_student(student_id: int, session: Session = Depends(get_session)):
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     return student
+
+@router.get("/with-teacher/", response_model=list[StudentReadWithTeacher])
+def list_students_with_teacher(session: Session = Depends(get_session)):
+    # Join Student with Team to get teacher details
+    statement = select(Student).join(Team, Student.homeroom_teacher_id == Team.id, isouter=True)
+    students = session.exec(statement).all()
+    return students
