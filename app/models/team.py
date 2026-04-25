@@ -1,3 +1,5 @@
+# app/models/team.py
+
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List, TYPE_CHECKING
 from app.models.enums import StaffRole, ClearanceLevel
@@ -12,6 +14,7 @@ class Team(SQLModel, table=True):
     first_name: str
     last_name: str
     email: str = Field(unique=True, index=True)
+    hashed_password: str  # New field – stores bcrypt hash
     role: StaffRole
     clearance_level: ClearanceLevel = Field(default=ClearanceLevel.LEVEL_5)
     location: str

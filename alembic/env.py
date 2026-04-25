@@ -5,6 +5,11 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from sqlmodel import SQLModel
+
+from app.database import DATABASE_URL             # so we can read the real URL
+from app.models import *                          # import all models to populate metadata
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -39,7 +44,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = DATABASE_URL  # Use the same URL as the app, ensuring consistency
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -51,18 +56,15 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+def run_migrations_online():
+    ...
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        url=DATABASE_URL,       # override with our actual URL
     )
+    ...
 
     with connectable.connect() as connection:
         context.configure(
