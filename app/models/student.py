@@ -37,7 +37,7 @@ class Student(SQLModel, table=True):
     medical_history: Optional["MedicalHistory"] = Relationship(back_populates="student")
     
     #Willbe added back once we creat these models
-    #attendance_records: List["Attendance"] = Relationship(back_populates="student")
+    attendance_records: List["Attendance"] = Relationship(back_populates="student")
     #skill_assessments: List["SkillAssessment"] = Relationship(back_populates="student")
     #supplies: List["StudentSupply"] = Relationship(back_populates="student")
 

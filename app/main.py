@@ -2,12 +2,14 @@ from fastapi import FastAPI
 from app.database import init_db
 from app.routers import team_router, students_router
 from app.routers import auth
+from app.routers import attendance
 
 app = FastAPI(title="Seven Oak Kindergarten Management System")
 
 # Include routers
 app.include_router(team_router)
 app.include_router(students_router)
+app.include_router(attendance.router)
 app.include_router(auth.router)
 
 @app.on_event("startup")

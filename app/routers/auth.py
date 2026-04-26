@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from fastapi.security import OAuth2PasswordRequestForm
+
 from app.database import get_session
 from app.models.team import Team
 from app.schemas.auth import LoginRequest, Token
@@ -12,11 +14,14 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=Token)
-def login(login_data: LoginRequest, session: Session = Depends(get_session)):
-    # Find the staff member by email
-    statement = select(Team).where(Team.email == login_data.email)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session)
+):
+    # form_data.username is the email the user typed
+    statement = select(Team).where(Team.email == form_data.username)
     user = session.exec(statement).first()
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -27,7 +32,6 @@ def login(login_data: LoginRequest, session: Session = Depends(get_session)):
             detail="Account is disabled",
         )
 
-    # Create token with the user's ID as the subject
     access_token = create_access_token(data={"sub": str(user.id)})
     return Token(access_token=access_token, token_type="bearer")
 
