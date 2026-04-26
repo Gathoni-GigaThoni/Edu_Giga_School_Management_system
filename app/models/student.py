@@ -39,7 +39,7 @@ class Student(SQLModel, table=True):
     #Willbe added back once we creat these models
     attendance_records: List["Attendance"] = Relationship(back_populates="student")
     #skill_assessments: List["SkillAssessment"] = Relationship(back_populates="student")
-    #supplies: List["StudentSupply"] = Relationship(back_populates="student")
+    supplies: List["StudentSupply"] = Relationship(back_populates="student")
 
     def compute_age_months(self) -> int:
         """Calculate age in months from date_of_birth to today."""

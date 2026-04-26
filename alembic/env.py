@@ -1,14 +1,14 @@
 from logging.config import fileConfig
-
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
 from alembic import context
+import sqlalchemy as sa
 
+# ---------- Added for SQLModel ----------
 from sqlmodel import SQLModel
-
-from app.database import DATABASE_URL             # so we can read the real URL
-from app.models import *                          # import all models to populate metadata
+from app.database import DATABASE_URL
+import app.models  # noqa: F401   # Import all models to populate SQLModel.metadata
+# ----------------------------------------
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,15 +21,26 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from sqlmodel import SQLModel
-from app.models import team, student, parent_guardian, medical   # import all models
-
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
 target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+
+def render_item(type_, obj, autogen_context):
+    """
+    Custom renderer to replace SQLModel's AutoString with sa.String.
+    This prevents migration files from containing sqlmodule.sql.sqltypes.AutoString,
+    which would require an extra import.
+    """
+    if isinstance(type_, sa.types.TypeEngine) and type_.__class__.__name__ == "AutoString":
+        return "sa.String()"
+    # Default rendering for all other types
+    return False
 
 
 def run_migrations_offline() -> None:
@@ -44,31 +55,38 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = DATABASE_URL  # Use the same URL as the app, ensuring consistency
+    url = DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_item=render_item,          # <-- use our custom renderer
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-def run_migrations_online():
-    ...
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context.
+
+    """
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=DATABASE_URL,       # override with our actual URL
+        url=DATABASE_URL,
     )
-    ...
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_item=render_item,      # <-- use our custom renderer
         )
 
         with context.begin_transaction():
