@@ -1,6 +1,6 @@
 # app/schemas/attendance.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import date
 from typing import Optional, List
 from app.models.enums import AttendanceStatus
@@ -17,8 +17,7 @@ class AttendanceCreate(AttendanceBase):
 class AttendanceRead(AttendanceBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Schema for bulk entry – teacher submits a list of these
 class AttendanceBulkEntry(BaseModel):

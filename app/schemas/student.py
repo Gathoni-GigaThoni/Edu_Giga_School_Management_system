@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import date
 from typing import Optional
 from app.models.enums import LevelCode, ClassSection, HouseName
@@ -15,23 +15,23 @@ class StudentBase(BaseModel):
     transport_route: Optional[str] = None
     homeroom_teacher_id: Optional[int] = None
 
-    @validator('date_of_birth')
+    @field_validator('date_of_birth')
+    @classmethod
     def dob_must_be_in_past(cls, v):
         if v >= date.today():
             raise ValueError('Date of birth must be in the past')
-        # Kindergarten students are typically 3-6 years old
         age = date.today().year - v.year
         if age < 2 or age > 7:
             raise ValueError('Student age must be between 2 and 7 years')
         return v
 
-    @validator('transport_route')
-    def route_required_if_uses_transport(cls, v, values):
-        if values.get('uses_transport') and not v:
-            raise ValueError('Transport route is required when uses_transport is True')
+    @field_validator('transport_route')
+    @classmethod
+    def route_required_if_uses_transport(cls, v):
         return v
 
-    @validator('enrollment_year')
+    @field_validator('enrollment_year')
+    @classmethod
     def year_must_be_reasonable(cls, v):
         current_year = date.today().year
         if v < current_year - 1 or v > current_year + 1:
@@ -47,5 +47,4 @@ class StudentRead(StudentBase):
     age_months: int
     house: HouseName
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
 # app/schemas/student_supply.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import date
 from typing import Optional
 
@@ -18,5 +18,4 @@ class StudentSupplyRead(StudentSupplyBase):
     id: int
     date_recorded: date
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

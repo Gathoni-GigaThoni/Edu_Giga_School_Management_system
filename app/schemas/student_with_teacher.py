@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from typing import Optional
 from app.models.enums import LevelCode, ClassSection, HouseName
@@ -21,5 +21,4 @@ class StudentReadWithTeacher(BaseModel):
     homeroom_teacher_id: Optional[int]
     homeroom_teacher: Optional[TeamRead]  # Nested teacher details
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

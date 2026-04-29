@@ -1,6 +1,6 @@
 # app/schemas/student_teacher.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from typing import Optional
 from app.models.enums import LevelCode, ClassSection, HouseName
@@ -22,5 +22,4 @@ class StudentReadTeacher(BaseModel):
     transport_route: Optional[str] = None
     homeroom_teacher_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
 # app/schemas/team.py
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.models.enums import StaffRole, ClearanceLevel
 
 class TeamBase(BaseModel):
@@ -19,5 +19,4 @@ class TeamRead(TeamBase):
     id: int
     # password is never returned
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

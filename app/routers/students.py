@@ -65,7 +65,7 @@ def create_student(
 
     # 5. Create Student instance
     student = Student(
-        **student_data.dict(),
+        **student_data.model_dump(),
         student_id=student_id,
         age_months=age_months,
         house=house,
