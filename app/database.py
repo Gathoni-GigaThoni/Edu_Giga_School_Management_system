@@ -13,7 +13,7 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 # Import all models so SQLModel.metadata knows about them
 # This must happen before create_all()
-from app.models import Team, Student, ParentGuardian, MedicalHistory, Skill, SkillAssessment, TermlyReportComment
+from app.models import Team, Student, ParentGuardian, MedicalHistory, Skill, SkillAssessment, TermlyReportComment, DisciplinaryLog
 
 def init_db():
     SQLModel.metadata.create_all(engine)

@@ -9,3 +9,4 @@ from app.models.student_supply import StudentSupply
 from app.models.skill import Skill
 from app.models.skill_assessment import SkillAssessment
 from app.models.termly_report_comment import TermlyReportComment
+from app.models.discipline import DisciplinaryLog

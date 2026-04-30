@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.attendance import Attendance
     from app.models.skill_assessment import SkillAssessment
     from app.models.student_supply import StudentSupply
+    from app.models.discipline import DisciplinaryLog
 
 class Student(SQLModel, table=True):
     __tablename__ = "student"
@@ -39,6 +40,7 @@ class Student(SQLModel, table=True):
     attendance_records: List["Attendance"] = Relationship(back_populates="student")
     skill_assessments: List["SkillAssessment"] = Relationship(back_populates="student")
     supplies: List["StudentSupply"] = Relationship(back_populates="student")
+    disciplinary_logs: List["DisciplinaryLog"] = Relationship(back_populates="student")
 
     def compute_age_months(self) -> int:
         """Calculate age in months from date_of_birth to today."""

@@ -10,7 +10,7 @@ from app.models.team import Team
 from app.schemas.student import StudentCreate, StudentRead
 from app.schemas.student_with_teacher import StudentReadWithTeacher
 from app.schemas.student_teacher import StudentReadTeacher
-from app.models.enums import LevelCode, HouseName, ClearanceLevel
+from app.models.enums import LevelCode, ClassSection, HouseName, ClearanceLevel
 from app.services.student_id_generator import generate_student_id
 from app.dependencies import get_current_staff, require_clearance, require_teacher_of_student
 
@@ -103,6 +103,52 @@ def list_students_with_teacher(
     )
     students = session.exec(statement).all()
     return students
+
+
+@router.get("/class/{level}/{section}/students", response_model=list[StudentRead])
+def get_class_list(
+    level: LevelCode,
+    section: ClassSection,
+    enrollment_year: int,
+    session: Session = Depends(get_session),
+    current_staff: Team = Depends(get_current_staff),
+):
+    students = session.exec(
+        select(Student).where(
+            Student.level == level,
+            Student.section == section,
+            Student.enrollment_year == enrollment_year,
+        )
+    ).all()
+    return students
+
+
+@router.get("/demographics/")
+def get_demographics(
+    session: Session = Depends(get_session),
+    current_staff: Team = Depends(get_current_staff),
+):
+    students = session.exec(select(Student)).all()
+
+    gender_dist: dict = {}
+    grade_dist: dict = {}
+    house_dist: dict = {}
+
+    for s in students:
+        gender_key = s.gender or "Unknown"
+        gender_dist[gender_key] = gender_dist.get(gender_key, 0) + 1
+
+        grade_key = s.level.value
+        grade_dist[grade_key] = grade_dist.get(grade_key, 0) + 1
+
+        house_key = s.house.value
+        house_dist[house_key] = house_dist.get(house_key, 0) + 1
+
+    return {
+        "gender_distribution": gender_dist,
+        "grade_distribution": grade_dist,
+        "house_distribution": house_dist,
+    }
 
 
 @router.get("/{student_id}", response_model=StudentRead)

@@ -9,6 +9,8 @@ from app.routers import supplies
 from app.routers import seed
 from app.routers import skills
 from app.routers import report_cards
+from app.routers import dashboard
+from app.routers import discipline
 from app.exception_handlers import integrity_error_handler
 
 
@@ -31,6 +33,8 @@ app.include_router(auth.router)
 app.include_router(seed.router)
 app.include_router(skills.router)
 app.include_router(report_cards.router)
+app.include_router(dashboard.router)
+app.include_router(discipline.router)
 
 
 @app.get("/")

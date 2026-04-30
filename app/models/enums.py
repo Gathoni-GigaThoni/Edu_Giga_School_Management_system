@@ -47,3 +47,9 @@ class AttendanceStatus(str, Enum):
     PRESENT = "Present"
     ABSENT = "Absent"
     LATE = "Late"
+
+# Disciplinary infraction severity
+class InfractionSeverity(str, Enum):
+    MINOR = "minor"
+    MODERATE = "moderate"
+    MAJOR = "major"
