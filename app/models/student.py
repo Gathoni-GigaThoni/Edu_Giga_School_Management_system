@@ -36,9 +36,8 @@ class Student(SQLModel, table=True):
     parent_guardians: List["ParentGuardian"] = Relationship(back_populates="student")
     medical_history: Optional["MedicalHistory"] = Relationship(back_populates="student")
     
-    #Willbe added back once we creat these models
     attendance_records: List["Attendance"] = Relationship(back_populates="student")
-    #skill_assessments: List["SkillAssessment"] = Relationship(back_populates="student")
+    skill_assessments: List["SkillAssessment"] = Relationship(back_populates="student")
     supplies: List["StudentSupply"] = Relationship(back_populates="student")
 
     def compute_age_months(self) -> int:
