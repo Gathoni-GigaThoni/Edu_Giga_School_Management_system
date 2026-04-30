@@ -2,17 +2,25 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from datetime import date
+from datetime import date, timedelta
 
 from app.database import get_session
 from app.models.student import Student
 from app.models.team import Team
+from app.models.parent_guardian import ParentGuardian
+from app.models.medical import MedicalHistory
+from app.models.attendance import Attendance
+from app.models.skill_assessment import SkillAssessment
+from app.models.skill import Skill
+from app.models.discipline import DisciplinaryLog
+from app.models.student_supply import StudentSupply
 from app.schemas.student import StudentCreate, StudentRead
 from app.schemas.student_with_teacher import StudentReadWithTeacher
 from app.schemas.student_teacher import StudentReadTeacher
 from app.models.enums import LevelCode, ClassSection, HouseName, ClearanceLevel
 from app.services.student_id_generator import generate_student_id
 from app.dependencies import get_current_staff, require_clearance, require_teacher_of_student
+from app.serializers import filter_fields_by_clearance
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
@@ -149,6 +157,130 @@ def get_demographics(
         "grade_distribution": grade_dist,
         "house_distribution": house_dist,
     }
+
+
+@router.get("/{student_id}/full-profile")
+def get_full_profile(
+    student_id: int,
+    session: Session = Depends(get_session),
+    current_staff: Team = Depends(get_current_staff),
+):
+    student = session.get(Student, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    if current_staff.role == "teacher" and student.homeroom_teacher_id != current_staff.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view profiles for your own homeroom students",
+        )
+
+    parents = session.exec(
+        select(ParentGuardian).where(ParentGuardian.student_id == student_id)
+    ).all()
+
+    medical = session.exec(
+        select(MedicalHistory).where(MedicalHistory.student_id == student_id)
+    ).first()
+
+    thirty_days_ago = date.today() - timedelta(days=30)
+    attendance_records = session.exec(
+        select(Attendance).where(
+            Attendance.student_id == student_id,
+            Attendance.attendance_date >= thirty_days_ago,
+        )
+    ).all()
+
+    assessments_raw = session.exec(
+        select(SkillAssessment)
+        .where(SkillAssessment.student_id == student_id)
+        .order_by(SkillAssessment.assessment_date.desc())
+        .limit(5)
+    ).all()
+
+    discipline_logs = session.exec(
+        select(DisciplinaryLog)
+        .where(DisciplinaryLog.student_id == student_id)
+        .order_by(DisciplinaryLog.incident_date.desc())
+    ).all()
+
+    supplies = session.exec(
+        select(StudentSupply).where(StudentSupply.student_id == student_id)
+    ).all()
+
+    assessments = []
+    for sa in assessments_raw:
+        skill = session.get(Skill, sa.skill_id)
+        assessments.append({
+            "skill_name": skill.name if skill else None,
+            "rating": sa.rating,
+            "teacher_comment": sa.teacher_comment,
+            "assessment_date": sa.assessment_date.isoformat(),
+        })
+
+    profile = {
+        "id": student.id,
+        "student_id": student.student_id,
+        "first_name": student.first_name,
+        "last_name": student.last_name,
+        "date_of_birth": student.date_of_birth.isoformat(),
+        "age_months": student.age_months,
+        "gender": student.gender,
+        "level": student.level.value,
+        "section": student.section.value,
+        "enrollment_year": student.enrollment_year,
+        "house": student.house.value,
+        "transport_route": student.transport_route,
+        "parents": [
+            {
+                "id": p.id,
+                "full_name": p.full_name,
+                "relationship": p.relationship,
+                "phone": p.phone,
+                "email": p.email,
+                "address": p.address,
+                "is_emergency_contact": p.is_emergency_contact,
+            }
+            for p in parents
+        ],
+        "medical": {
+            "allergies": medical.allergies,
+            "medications": medical.medications,
+            "doctor_name": medical.doctor_name,
+            "doctor_phone": medical.doctor_phone,
+            "notes": medical.notes,
+        } if medical else None,
+        "attendance": {
+            "total_days": len(attendance_records),
+            "present": sum(1 for r in attendance_records if r.status == "Present"),
+            "absent": sum(1 for r in attendance_records if r.status == "Absent"),
+            "late": sum(1 for r in attendance_records if r.status == "Late"),
+        },
+        "assessments": assessments,
+        "discipline": [
+            {
+                "id": d.id,
+                "description": d.description,
+                "severity": d.severity,
+                "incident_date": d.incident_date.isoformat(),
+                "action_taken": d.action_taken,
+                "is_resolved": d.is_resolved,
+                "resolution_notes": d.resolution_notes,
+            }
+            for d in discipline_logs
+        ],
+        "supplies": [
+            {
+                "id": s.id,
+                "item_name": s.item_name,
+                "quantity": s.quantity,
+                "term": s.term,
+            }
+            for s in supplies
+        ],
+    }
+
+    return filter_fields_by_clearance(profile, current_staff.clearance_level)
 
 
 @router.get("/{student_id}", response_model=StudentRead)
