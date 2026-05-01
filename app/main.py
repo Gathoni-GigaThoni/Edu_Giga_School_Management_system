@@ -16,7 +16,7 @@ from app.exception_handlers import integrity_error_handler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    # init_db()
     yield
 
 
