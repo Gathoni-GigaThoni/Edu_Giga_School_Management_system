@@ -13,6 +13,8 @@ from app.routers import dashboard
 from app.routers import discipline
 from app.exception_handlers import integrity_error_handler
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,6 +22,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Seven Oak Kindergarten Management System", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://edugiga-frontend-4wzv7k7ec-gathoni-kaarays-projects.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_exception_handler(IntegrityError, integrity_error_handler)
 
