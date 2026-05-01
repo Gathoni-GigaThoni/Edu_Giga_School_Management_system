@@ -18,10 +18,10 @@ class ClearanceLevel(int, Enum):
 
 # Learning levels (our school's grade levels)
 class LevelCode(str, Enum):
-    BABY = "Baby"          # Baby Class
-    PLAYGROUP = "Okra"     # Playgroup
-    PP1 = "Samaria"        # Pre-Primary 1
-    PP2 = "Manna"          # Pre-Primary 2
+    BABY = "Acorn"          # Baby Class
+    PLAYGROUP = "Willow"     # Playgroup
+    PP1 = "Maple"        # Pre-Primary 1
+    PP2 = "Oak"          # Pre-Primary 2
 
 # Class sections (two per level)
 class ClassSection(str, Enum):
