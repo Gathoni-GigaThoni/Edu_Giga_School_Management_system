@@ -25,7 +25,7 @@ app = FastAPI(title="Seven Oak Kindergarten Management System", lifespan=lifespa
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://edugiga-frontend-4wzv7k7ec-gathoni-kaarays-projects.vercel.app"],
+    allow_origins=["https://edugiga-frontend.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
