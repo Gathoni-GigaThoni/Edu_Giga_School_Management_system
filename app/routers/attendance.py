@@ -8,6 +8,7 @@ from typing import List, Optional
 from app.database import get_session
 from app.models.attendance import Attendance
 from app.models.student import Student
+from app.models.class_ import SchoolClass
 from app.models.team import Team
 from app.schemas.attendance import AttendanceCreate, AttendanceRead, AttendanceBulkEntry
 from app.models.enums import ClearanceLevel
@@ -51,19 +52,21 @@ def bulk_attendance_entry(
     Bulk attendance entry for a whole class. Teachers can only mark their own students.
     Managers and above can mark any student.
     """
-    # Teachers must only submit entries for students they are homeroom teacher of
-    if current_staff.role == "teacher":
-        # Get the list of student IDs the teacher is responsible for
-        homeroom_student_ids = session.exec(
-            select(Student.id).where(Student.homeroom_teacher_id == current_staff.id)
+    # Teachers must only submit entries for students in their homeroom class
+    if current_staff.role.value == "teacher":
+        teacher_classes = session.exec(
+            select(SchoolClass).where(SchoolClass.homeroom_teacher_id == current_staff.id)
         ).all()
-
-        # Validate that every submitted student is in the teacher's class
+        class_ids = [c.id for c in teacher_classes]
+        homeroom_student_ids = (
+            session.exec(select(Student.id).where(Student.class_id.in_(class_ids))).all()
+            if class_ids else []
+        )
         for entry in entries:
             if entry.student_id not in homeroom_student_ids:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"You are not the homeroom teacher of student ID {entry.student_id}",
+                    detail=f"Student ID {entry.student_id} is not in your homeroom class",
                 )
 
     # Upsert logic: if a record already exists for this student+date, update it; else create new
@@ -162,17 +165,20 @@ def get_teacher_class_sheet(
     Returns the attendance sheet for the current teacher's homeroom class.
     For each student, shows their ID, name, and current status for the given date.
     """
-    # Only teachers can access this endpoint; others get a 403
-    if current_staff.role != "teacher":
+    if current_staff.role.value != "teacher":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only teachers can view their class sheet",
         )
 
-    # Fetch all students in the teacher's class
-    students = session.exec(
-        select(Student).where(Student.homeroom_teacher_id == current_staff.id)
+    teacher_classes = session.exec(
+        select(SchoolClass).where(SchoolClass.homeroom_teacher_id == current_staff.id)
     ).all()
+    class_ids = [c.id for c in teacher_classes]
+    students = (
+        session.exec(select(Student).where(Student.class_id.in_(class_ids))).all()
+        if class_ids else []
+    )
 
     # For each student, get today's attendance record (if any)
     sheet = []

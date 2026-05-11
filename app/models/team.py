@@ -5,7 +5,8 @@ from typing import Optional, List, TYPE_CHECKING
 from app.models.enums import StaffRole, ClearanceLevel
 
 if TYPE_CHECKING:
-    from app.models.student import Student
+    from app.models.class_ import SchoolClass
+
 
 class Team(SQLModel, table=True):
     __tablename__ = "team"
@@ -14,11 +15,11 @@ class Team(SQLModel, table=True):
     first_name: str
     last_name: str
     email: str = Field(unique=True, index=True)
-    hashed_password: str  # New field – stores bcrypt hash
+    hashed_password: str
     role: StaffRole
     clearance_level: ClearanceLevel = Field(default=ClearanceLevel.LEVEL_5)
     location: str
     is_active: bool = Field(default=True)
 
-    # Relationship: a teacher can be homeroom for many students
-    students: List["Student"] = Relationship(back_populates="homeroom_teacher")
+    # A teacher can be the homeroom teacher for multiple classes
+    homeroom_classes: List["SchoolClass"] = Relationship(back_populates="homeroom_teacher")

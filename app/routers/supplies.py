@@ -8,6 +8,7 @@ from typing import List, Optional
 from app.database import get_session
 from app.models.student_supply import StudentSupply
 from app.models.student import Student
+from app.models.class_ import SchoolClass
 from app.models.team import Team
 from app.schemas.student_supply import StudentSupplyCreate, StudentSupplyRead
 from app.dependencies import get_current_staff, require_clearance
@@ -34,12 +35,13 @@ def add_supply(
             detail="Student not found",
         )
 
-    # 2. Access control: only homeroom teacher (or manager/admin) can add
-    if current_staff.role == "teacher":
-        if student.homeroom_teacher_id != current_staff.id:
+    # 2. Access control: only the homeroom teacher (or manager/admin) can add
+    if current_staff.role.value == "teacher":
+        sc = session.get(SchoolClass, student.class_id) if student.class_id else None
+        if not sc or sc.homeroom_teacher_id != current_staff.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only add supplies for your own students",
+                detail="You can only add supplies for students in your own class",
             )
 
     # 3. Create the supply record
@@ -81,17 +83,22 @@ def get_my_class_supplies(
     Get supplies for all students in the current teacher's homeroom class.
     Only accessible by teachers.
     """
-    if current_staff.role != "teacher":
+    if current_staff.role.value != "teacher":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only teachers can access their class supplies",
         )
 
-    query = select(StudentSupply).join(Student).where(
-        Student.homeroom_teacher_id == current_staff.id
-    )
+    teacher_classes = session.exec(
+        select(SchoolClass).where(SchoolClass.homeroom_teacher_id == current_staff.id)
+    ).all()
+    class_ids = [c.id for c in teacher_classes]
+
+    if not class_ids:
+        return []
+
+    query = select(StudentSupply).join(Student).where(Student.class_id.in_(class_ids))
     if term:
         query = query.where(StudentSupply.term == term)
 
-    supplies = session.exec(query).all()
-    return supplies
+    return session.exec(query).all()

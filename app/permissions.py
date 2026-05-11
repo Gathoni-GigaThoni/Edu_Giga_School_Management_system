@@ -1,22 +1,21 @@
 from app.models.enums import ClearanceLevel
 
-# Maps field keys (and "section" keys for whole-section gating) to the
-# minimum ClearanceLevel whose *value* must be <= the user's clearance value.
-# Lower value = higher privilege, so LEVEL_1 sees everything, LEVEL_5 sees least.
+# Maps field keys to the minimum ClearanceLevel required to see them.
+# Lower numeric value = higher privilege (LEVEL_1 sees everything, LEVEL_5 sees least).
 FIELD_PERMISSIONS: dict[str, ClearanceLevel] = {
     # ── Student basic fields ────────────────────────────────────────────────
-    "id":               ClearanceLevel.LEVEL_5,
-    "student_id":       ClearanceLevel.LEVEL_5,
-    "first_name":       ClearanceLevel.LEVEL_5,
-    "last_name":        ClearanceLevel.LEVEL_5,
-    "level":            ClearanceLevel.LEVEL_5,
-    "section":          ClearanceLevel.LEVEL_5,
-    "house":            ClearanceLevel.LEVEL_5,
-    "date_of_birth":    ClearanceLevel.LEVEL_4,
-    "age_months":       ClearanceLevel.LEVEL_4,
-    "gender":           ClearanceLevel.LEVEL_4,
-    "enrollment_year":  ClearanceLevel.LEVEL_4,
-    "transport_route":  ClearanceLevel.LEVEL_3,
+    "id":                   ClearanceLevel.LEVEL_5,
+    "student_id":           ClearanceLevel.LEVEL_5,
+    "first_name":           ClearanceLevel.LEVEL_5,
+    "last_name":            ClearanceLevel.LEVEL_5,
+    "is_active":            ClearanceLevel.LEVEL_5,
+    "level":                ClearanceLevel.LEVEL_5,
+    "class_name":           ClearanceLevel.LEVEL_5,
+    "stream":               ClearanceLevel.LEVEL_5,
+    "date_of_birth":        ClearanceLevel.LEVEL_4,
+    "age_months":           ClearanceLevel.LEVEL_4,
+    "gender":               ClearanceLevel.LEVEL_4,
+    "transport_route_id":   ClearanceLevel.LEVEL_3,
 
     # ── Parents section ─────────────────────────────────────────────────────
     "parents":                      ClearanceLevel.LEVEL_4,
@@ -24,17 +23,25 @@ FIELD_PERMISSIONS: dict[str, ClearanceLevel] = {
     "parents.full_name":            ClearanceLevel.LEVEL_4,
     "parents.relationship":         ClearanceLevel.LEVEL_4,
     "parents.phone":                ClearanceLevel.LEVEL_4,
-    "parents.is_emergency_contact": ClearanceLevel.LEVEL_4,
+    "parents.is_primary":           ClearanceLevel.LEVEL_4,
+    "parents.pickup_authorized":    ClearanceLevel.LEVEL_4,
     "parents.email":                ClearanceLevel.LEVEL_3,
-    "parents.address":              ClearanceLevel.LEVEL_3,
+    "parents.id_document":          ClearanceLevel.LEVEL_2,
 
     # ── Medical section ─────────────────────────────────────────────────────
-    "medical":              ClearanceLevel.LEVEL_3,
-    "medical.allergies":    ClearanceLevel.LEVEL_3,
-    "medical.medications":  ClearanceLevel.LEVEL_3,
-    "medical.notes":        ClearanceLevel.LEVEL_3,
-    "medical.doctor_name":  ClearanceLevel.LEVEL_2,
-    "medical.doctor_phone": ClearanceLevel.LEVEL_2,
+    "medical":                          ClearanceLevel.LEVEL_3,
+    "medical.allergies":               ClearanceLevel.LEVEL_3,
+    "medical.chronic_symptoms":        ClearanceLevel.LEVEL_3,
+    "medical.allergies_document":      ClearanceLevel.LEVEL_2,
+    "medical.chronic_document":        ClearanceLevel.LEVEL_2,
+    "medical.vaccination_document":    ClearanceLevel.LEVEL_2,
+
+    # ── Previous education section ───────────────────────────────────────────
+    "previous_education":                   ClearanceLevel.LEVEL_4,
+    "previous_education.has_previous":      ClearanceLevel.LEVEL_4,
+    "previous_education.school_name":       ClearanceLevel.LEVEL_4,
+    "previous_education.level_completed":   ClearanceLevel.LEVEL_4,
+    "previous_education.document_path":     ClearanceLevel.LEVEL_2,
 
     # ── Attendance section ──────────────────────────────────────────────────
     "attendance":            ClearanceLevel.LEVEL_4,

@@ -20,8 +20,9 @@ class AttendanceSummary(BaseModel):
 class StudentReportCard(BaseModel):
     student_id: str
     full_name: str
-    level: str
-    section: str
+    level: str        # AcademicLevel.name e.g. "Maple"
+    class_name: str   # SchoolClass.name  e.g. "Maple 2026"
+    stream: Optional[str]
     term: str
     academic_year: int
     skills: List[SkillItem]

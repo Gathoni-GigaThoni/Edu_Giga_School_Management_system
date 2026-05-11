@@ -71,22 +71,26 @@ def require_clearance(min_level: ClearanceLevel):
 
 def require_teacher_of_student():
     """
-    Dependency that checks if the current staff member is a teacher
-    and is the homeroom teacher of the student given in the path parameter.
+    Dependency that checks whether the logged-in teacher is the homeroom teacher
+    of the student's assigned SchoolClass. Non-teachers pass through unchecked.
     """
     async def checker(
-        student_id: int,                                 # ← injected from path
+        student_id: int,
         current_staff: Team = Depends(get_current_staff),
         session: Session = Depends(get_session),
     ) -> Team:
-        if current_staff.role == "teacher":
+        if current_staff.role.value == "teacher":
+            from app.models.class_ import SchoolClass
             student = session.get(Student, student_id)
             if student is None:
                 raise HTTPException(status_code=404, detail="Student not found")
-            if student.homeroom_teacher_id != current_staff.id:
+            if not student.class_id:
+                raise HTTPException(status_code=403, detail="Student has no class assigned")
+            school_class = session.get(SchoolClass, student.class_id)
+            if not school_class or school_class.homeroom_teacher_id != current_staff.id:
                 raise HTTPException(
                     status_code=403,
-                    detail="You can only access students in your own class",
+                    detail="You can only access students in your own homeroom class",
                 )
         return current_staff
     return checker

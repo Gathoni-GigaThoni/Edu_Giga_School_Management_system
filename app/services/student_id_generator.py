@@ -1,26 +1,32 @@
+"""
+Student ID format:  SOIS-{level_code}-{stream_code}-{seq:03d}
+
+  SOIS        = Seven Oak International School (school code)
+  level_code  = AcademicLevel.code, e.g. "M" for Maple
+  stream_code = first letter of stream, upper-cased, e.g. "E" for East
+                (defaults to "X" when no stream is provided)
+  seq         = 1-based count of students already in the same class + stream
+
+Example: SOIS-M-E-001 is the first Maple-East student.
+"""
 from sqlmodel import Session, select, func
 from app.models.student import Student
-from app.models.enums import LevelCode, ClassSection
+
 
 def generate_student_id(
     session: Session,
-    level: LevelCode,
-    section: ClassSection,
-    enrollment_year: int
+    level_code: str,
+    stream: str | None,
+    class_id: int,
 ) -> str:
-    """
-    Generate a unique student ID in the format:
-    OS-{sequential:03d}-{level}-{section}-{year}
+    stream_code = (stream[0].upper() if stream else "X")
 
-    The sequential number is based on existing students in the same level and year.
-    """
-    # Count existing students with same level and enrollment year
     count = session.exec(
         select(func.count()).select_from(Student).where(
-            Student.level == level,
-            Student.enrollment_year == enrollment_year
+            Student.class_id == class_id,
+            Student.stream == stream,
         )
     ).one()
 
-    sequential = f"{count + 1:03d}"
-    return f"OS-{sequential}-{level.value}-{section.value}-{enrollment_year}"
+    seq = f"{count + 1:03d}"
+    return f"SOIS-{level_code.upper()}-{stream_code}-{seq}"

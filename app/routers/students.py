@@ -1,162 +1,179 @@
 # app/routers/students.py
+"""
+Endpoints for student registration and profile access.
+
+Permissions matrix
+──────────────────
+Endpoint                              Min clearance
+POST   /students/                     LEVEL_2
+GET    /students/                     LEVEL_5 (any staff)
+GET    /students/demographics/        LEVEL_5
+GET    /students/class/{id}/students  LEVEL_5
+GET    /students/{id}                 LEVEL_5
+GET    /students/{id}/full-profile    LEVEL_5 (teachers: own class only)
+GET    /students/teacher-view/{id}    teacher of student (own class only)
+"""
+from datetime import date, timedelta
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from datetime import date, timedelta
 
 from app.database import get_session
 from app.models.student import Student
+from app.models.academic_level import AcademicLevel
+from app.models.class_ import SchoolClass
 from app.models.team import Team
-from app.models.parent_guardian import ParentGuardian
-from app.models.medical import MedicalHistory
+from app.models.route import Route
+from app.models.student_route import StudentRoute
+from app.models.previous_education import PreviousEducation
+from app.models.medical_information import MedicalInformation
+from app.models.parent_info import ParentInfo
 from app.models.attendance import Attendance
 from app.models.skill_assessment import SkillAssessment
 from app.models.skill import Skill
 from app.models.discipline import DisciplinaryLog
 from app.models.student_supply import StudentSupply
-from app.schemas.student import StudentCreate, StudentRead
-from app.schemas.student_with_teacher import StudentReadWithTeacher
-from app.schemas.student_teacher import StudentReadTeacher
-from app.models.enums import LevelCode, ClassSection, HouseName, ClearanceLevel
+from app.models.enums import ClearanceLevel
+from app.schemas.student import StudentRegisterRequest, StudentRead
 from app.services.student_id_generator import generate_student_id
 from app.dependencies import get_current_staff, require_clearance, require_teacher_of_student
 from app.serializers import filter_fields_by_clearance
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
-LEVEL_TO_HOUSE = {
-    LevelCode.BABY: HouseName.SUNFLOWER,
-    LevelCode.PLAYGROUP: HouseName.BLUEBELL,
-    LevelCode.PP1: HouseName.DAFFODIL,
-    LevelCode.PP2: HouseName.MARIGOLD,
-}
-
 
 @router.post("/", response_model=StudentRead, status_code=status.HTTP_201_CREATED)
-def create_student(
-    student_data: StudentCreate,
+def register_student(
+    payload: StudentRegisterRequest,
     session: Session = Depends(get_session),
-    current_staff: Team = Depends(require_clearance(ClearanceLevel.LEVEL_2))
+    current_staff: Team = Depends(require_clearance(ClearanceLevel.LEVEL_2)),
 ):
     """
-    Create a new student. Only staff with clearance level 2 (manager) and above.
+    Full student registration: creates the Student record plus nested
+    PreviousEducation, MedicalInformation, and ParentInfo records atomically.
     """
-    # 1. Validate homeroom teacher if provided
-    if student_data.homeroom_teacher_id is not None:
-        teacher = session.get(Team, student_data.homeroom_teacher_id)
-        if not teacher:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Homeroom teacher not found",
-            )
-        if teacher.role != "teacher":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Assigned staff member is not a teacher",
-            )
+    level = session.get(AcademicLevel, payload.academic_level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Academic level not found")
 
-    # 2. Generate student_id
-    student_id = generate_student_id(
-        session,
-        student_data.level,
-        student_data.section,
-        student_data.enrollment_year,
-    )
+    school_class = session.get(SchoolClass, payload.class_id)
+    if not school_class:
+        raise HTTPException(status_code=404, detail="Class not found")
 
-    # 3. Compute age in months
-    today = date.today()
-    dob = student_data.date_of_birth
-    age_months = (today.year - dob.year) * 12 + (today.month - dob.month)
+    if school_class.academic_level_id != level.id:
+        raise HTTPException(status_code=400, detail="Class does not belong to the specified academic level")
 
-    # 4. Assign house based on level
-    house = LEVEL_TO_HOUSE[student_data.level]
+    if payload.transport_route_id:
+        if not session.get(Route, payload.transport_route_id):
+            raise HTTPException(status_code=404, detail="Transport route not found")
 
-    # 5. Create Student instance
+    student_id = generate_student_id(session, level.code, payload.stream, payload.class_id)
+
+    dob = payload.date_of_birth
+    age_months = (date.today().year - dob.year) * 12 + (date.today().month - dob.month)
+
     student = Student(
-        **student_data.model_dump(),
         student_id=student_id,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        date_of_birth=dob,
         age_months=age_months,
-        house=house,
+        gender=payload.gender,
+        is_active=payload.is_active,
+        stream=payload.stream,
+        academic_level_id=payload.academic_level_id,
+        class_id=payload.class_id,
+        transport_route_id=payload.transport_route_id,
     )
     session.add(student)
+    session.flush()  # get student.id before committing
+
+    if payload.previous_education:
+        session.add(PreviousEducation(
+            student_id=student.id,
+            **payload.previous_education.model_dump(),
+        ))
+
+    if payload.medical_info:
+        session.add(MedicalInformation(
+            student_id=student.id,
+            **payload.medical_info.model_dump(),
+        ))
+
+    for p in payload.parents:
+        session.add(ParentInfo(
+            student_id=student.id,
+            full_name=p.full_name,
+            email=p.email,
+            phone=p.phone,
+            relationship=p.relationship,
+            is_primary=p.is_primary,
+            id_document=p.id_document,
+            pickup_authorized=p.pickup_authorized,
+        ))
+
+    # If transport is specified, also create a detailed StudentRoute record
+    if payload.transport_route_id:
+        session.add(StudentRoute(
+            student_id=student.id,
+            route_id=payload.transport_route_id,
+            direction="two_way",
+            active=True,
+        ))
+
     session.commit()
     session.refresh(student)
     return student
 
 
-@router.get("/", response_model=list[StudentRead])
+@router.get("/", response_model=List[StudentRead])
 def list_students(
     skip: int = 0,
     limit: int = 100,
     session: Session = Depends(get_session),
-    current_staff: Team = Depends(get_current_staff)
+    _: Team = Depends(get_current_staff),
 ):
-    """
-    List all students. Any authenticated staff member can view the basic list.
-    """
-    students = session.exec(select(Student).offset(skip).limit(limit)).all()
-    return students
-
-
-@router.get("/with-teacher/", response_model=list[StudentReadWithTeacher])
-def list_students_with_teacher(
-    session: Session = Depends(get_session),
-    current_staff: Team = Depends(get_current_staff)
-):
-    """
-    List students with their homeroom teacher details.
-    """
-    statement = select(Student).join(
-        Team, Student.homeroom_teacher_id == Team.id, isouter=True
-    )
-    students = session.exec(statement).all()
-    return students
-
-
-@router.get("/class/{level}/{section}/students", response_model=list[StudentRead])
-def get_class_list(
-    level: LevelCode,
-    section: ClassSection,
-    enrollment_year: int,
-    session: Session = Depends(get_session),
-    current_staff: Team = Depends(get_current_staff),
-):
-    students = session.exec(
-        select(Student).where(
-            Student.level == level,
-            Student.section == section,
-            Student.enrollment_year == enrollment_year,
-        )
-    ).all()
-    return students
+    return session.exec(select(Student).offset(skip).limit(limit)).all()
 
 
 @router.get("/demographics/")
 def get_demographics(
     session: Session = Depends(get_session),
-    current_staff: Team = Depends(get_current_staff),
+    _: Team = Depends(get_current_staff),
 ):
     students = session.exec(select(Student)).all()
-
     gender_dist: dict = {}
-    grade_dist: dict = {}
-    house_dist: dict = {}
+    level_dist: dict = {}
+    stream_dist: dict = {}
 
     for s in students:
-        gender_key = s.gender or "Unknown"
-        gender_dist[gender_key] = gender_dist.get(gender_key, 0) + 1
+        gender_dist[s.gender or "Unknown"] = gender_dist.get(s.gender or "Unknown", 0) + 1
 
-        grade_key = s.level.value
-        grade_dist[grade_key] = grade_dist.get(grade_key, 0) + 1
+        level = session.get(AcademicLevel, s.academic_level_id) if s.academic_level_id else None
+        level_key = level.name if level else "Unknown"
+        level_dist[level_key] = level_dist.get(level_key, 0) + 1
 
-        house_key = s.house.value
-        house_dist[house_key] = house_dist.get(house_key, 0) + 1
+        stream_key = s.stream or "Unassigned"
+        stream_dist[stream_key] = stream_dist.get(stream_key, 0) + 1
 
     return {
+        "total_students": len(students),
         "gender_distribution": gender_dist,
-        "grade_distribution": grade_dist,
-        "house_distribution": house_dist,
+        "level_distribution": level_dist,
+        "stream_distribution": stream_dist,
     }
+
+
+@router.get("/class/{class_id}/students", response_model=List[StudentRead])
+def get_class_list(
+    class_id: int,
+    session: Session = Depends(get_session),
+    _: Team = Depends(get_current_staff),
+):
+    if not session.get(SchoolClass, class_id):
+        raise HTTPException(status_code=404, detail="Class not found")
+    return session.exec(select(Student).where(Student.class_id == class_id)).all()
 
 
 @router.get("/{student_id}/full-profile")
@@ -169,19 +186,18 @@ def get_full_profile(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    if current_staff.role == "teacher" and student.homeroom_teacher_id != current_staff.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view profiles for your own homeroom students",
-        )
+    if current_staff.role.value == "teacher":
+        if not student.class_id:
+            raise HTTPException(status_code=403, detail="Student has no class assigned")
+        sc = session.get(SchoolClass, student.class_id)
+        if not sc or sc.homeroom_teacher_id != current_staff.id:
+            raise HTTPException(status_code=403, detail="You can only view profiles for students in your class")
 
-    parents = session.exec(
-        select(ParentGuardian).where(ParentGuardian.student_id == student_id)
-    ).all()
-
-    medical = session.exec(
-        select(MedicalHistory).where(MedicalHistory.student_id == student_id)
-    ).first()
+    level = session.get(AcademicLevel, student.academic_level_id) if student.academic_level_id else None
+    sc = session.get(SchoolClass, student.class_id) if student.class_id else None
+    parents = session.exec(select(ParentInfo).where(ParentInfo.student_id == student_id)).all()
+    medical = session.exec(select(MedicalInformation).where(MedicalInformation.student_id == student_id)).first()
+    prev_edu = session.exec(select(PreviousEducation).where(PreviousEducation.student_id == student_id)).first()
 
     thirty_days_ago = date.today() - timedelta(days=30)
     attendance_records = session.exec(
@@ -204,19 +220,17 @@ def get_full_profile(
         .order_by(DisciplinaryLog.incident_date.desc())
     ).all()
 
-    supplies = session.exec(
-        select(StudentSupply).where(StudentSupply.student_id == student_id)
-    ).all()
+    supplies = session.exec(select(StudentSupply).where(StudentSupply.student_id == student_id)).all()
 
-    assessments = []
-    for sa in assessments_raw:
-        skill = session.get(Skill, sa.skill_id)
-        assessments.append({
-            "skill_name": skill.name if skill else None,
+    assessments = [
+        {
+            "skill_name": (session.get(Skill, sa.skill_id).name if session.get(Skill, sa.skill_id) else None),
             "rating": sa.rating,
             "teacher_comment": sa.teacher_comment,
             "assessment_date": sa.assessment_date.isoformat(),
-        })
+        }
+        for sa in assessments_raw
+    ]
 
     profile = {
         "id": student.id,
@@ -226,11 +240,11 @@ def get_full_profile(
         "date_of_birth": student.date_of_birth.isoformat(),
         "age_months": student.age_months,
         "gender": student.gender,
-        "level": student.level.value,
-        "section": student.section.value,
-        "enrollment_year": student.enrollment_year,
-        "house": student.house.value,
-        "transport_route": student.transport_route,
+        "is_active": student.is_active,
+        "stream": student.stream,
+        "level": level.name if level else None,
+        "class_name": sc.name if sc else None,
+        "transport_route_id": student.transport_route_id,
         "parents": [
             {
                 "id": p.id,
@@ -238,18 +252,24 @@ def get_full_profile(
                 "relationship": p.relationship,
                 "phone": p.phone,
                 "email": p.email,
-                "address": p.address,
-                "is_emergency_contact": p.is_emergency_contact,
+                "is_primary": p.is_primary,
+                "pickup_authorized": p.pickup_authorized,
             }
             for p in parents
         ],
         "medical": {
             "allergies": medical.allergies,
-            "medications": medical.medications,
-            "doctor_name": medical.doctor_name,
-            "doctor_phone": medical.doctor_phone,
-            "notes": medical.notes,
+            "chronic_symptoms": medical.chronic_symptoms,
+            "allergies_document": medical.allergies_document,
+            "chronic_document": medical.chronic_document,
+            "vaccination_document": medical.vaccination_document,
         } if medical else None,
+        "previous_education": {
+            "has_previous": prev_edu.has_previous,
+            "school_name": prev_edu.school_name,
+            "level_completed": prev_edu.level_completed,
+            "document_path": prev_edu.document_path,
+        } if prev_edu else None,
         "attendance": {
             "total_days": len(attendance_records),
             "present": sum(1 for r in attendance_records if r.status == "Present"),
@@ -270,12 +290,7 @@ def get_full_profile(
             for d in discipline_logs
         ],
         "supplies": [
-            {
-                "id": s.id,
-                "item_name": s.item_name,
-                "quantity": s.quantity,
-                "term": s.term,
-            }
+            {"id": s.id, "item_name": s.item_name, "quantity": s.quantity, "term": s.term}
             for s in supplies
         ],
     }
@@ -287,26 +302,19 @@ def get_full_profile(
 def get_student(
     student_id: int,
     session: Session = Depends(get_session),
-    current_staff: Team = Depends(get_current_staff)
+    _: Team = Depends(get_current_staff),
 ):
-    """
-    Retrieve full details of a single student. Available to any authenticated staff.
-    For teachers, use `/teacher-view/{student_id}` instead to see limited data.
-    """
     student = session.get(Student, student_id)
     if not student:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found",
-        )
+        raise HTTPException(status_code=404, detail="Student not found")
     return student
 
 
-@router.get("/teacher-view/{student_id}", response_model=StudentReadTeacher)
+@router.get("/teacher-view/{student_id}", response_model=StudentRead)
 def get_student_for_teacher(
     student_id: int,
     session: Session = Depends(get_session),
-    current_staff: Team = Depends(require_teacher_of_student())  # ← no argument here
+    current_staff: Team = Depends(require_teacher_of_student()),
 ):
     student = session.get(Student, student_id)
     if not student:

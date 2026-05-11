@@ -3,6 +3,8 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models.student import Student
+from app.models.academic_level import AcademicLevel
+from app.models.class_ import SchoolClass
 from app.models.team import Team
 from app.models.attendance import Attendance
 from app.models.skill_assessment import SkillAssessment
@@ -25,11 +27,13 @@ def save_termly_comment(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    if current_staff.role == "teacher" and student.homeroom_teacher_id != current_staff.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only comment on your own homeroom students",
-        )
+    if current_staff.role.value == "teacher":
+        sc = session.get(SchoolClass, student.class_id) if student.class_id else None
+        if not sc or sc.homeroom_teacher_id != current_staff.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only comment on students in your own class",
+            )
 
     existing = session.exec(
         select(TermlyReportComment).where(
@@ -68,11 +72,13 @@ def get_report_card(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    if current_staff.role == "teacher" and student.homeroom_teacher_id != current_staff.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view report cards for your own homeroom students",
-        )
+    if current_staff.role.value == "teacher":
+        sc = session.get(SchoolClass, student.class_id) if student.class_id else None
+        if not sc or sc.homeroom_teacher_id != current_staff.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view report cards for students in your own class",
+            )
 
     # Skill assessments for this term
     assessments = session.exec(
@@ -112,11 +118,15 @@ def get_report_card(
         )
     ).first()
 
+    level_obj = session.get(AcademicLevel, student.academic_level_id) if student.academic_level_id else None
+    class_obj = session.get(SchoolClass, student.class_id) if student.class_id else None
+
     return StudentReportCard(
         student_id=student.student_id,
         full_name=f"{student.first_name} {student.last_name}",
-        level=student.level.value,
-        section=student.section.value,
+        level=level_obj.name if level_obj else "Unknown",
+        class_name=class_obj.name if class_obj else "Unknown",
+        stream=student.stream,
         term=term,
         academic_year=academic_year,
         skills=skills,

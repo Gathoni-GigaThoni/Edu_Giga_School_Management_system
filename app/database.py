@@ -11,12 +11,13 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL, echo=True)
 
-# Import all models so SQLModel.metadata knows about them
-# This must happen before create_all()
-from app.models import Team, Student, ParentGuardian, MedicalHistory, Skill, SkillAssessment, TermlyReportComment, DisciplinaryLog
+# Import all models so SQLModel.metadata is fully populated before create_all()
+import app.models  # noqa: F401, E402
+
 
 def init_db():
     SQLModel.metadata.create_all(engine)
+
 
 def get_session():
     with Session(engine) as session:

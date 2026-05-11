@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models.student import Student
+from app.models.class_ import SchoolClass
 from app.models.attendance import Attendance
 from app.models.skill_assessment import SkillAssessment
 from app.models.student_supply import StudentSupply
@@ -24,9 +25,14 @@ def teacher_dashboard(
             detail="Only teachers can access this dashboard",
         )
 
-    students = session.exec(
-        select(Student).where(Student.homeroom_teacher_id == current_staff.id)
+    teacher_classes = session.exec(
+        select(SchoolClass).where(SchoolClass.homeroom_teacher_id == current_staff.id)
     ).all()
+    class_ids = [c.id for c in teacher_classes]
+    students = (
+        session.exec(select(Student).where(Student.class_id.in_(class_ids))).all()
+        if class_ids else []
+    )
     student_ids = [s.id for s in students]
     total_students = len(student_ids)
 

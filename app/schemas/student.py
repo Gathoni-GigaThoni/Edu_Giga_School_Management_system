@@ -1,50 +1,88 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from datetime import date
-from typing import Optional
-from app.models.enums import LevelCode, ClassSection, HouseName
+from typing import Optional, List
 
-class StudentBase(BaseModel):
+from app.models.enums import ParentRelationship
+from app.schemas.parent_info import ParentInfoCreate, ParentInfoRead
+from app.schemas.previous_education import PreviousEducationCreate, PreviousEducationRead
+from app.schemas.medical_information import MedicalInformationCreate, MedicalInformationRead
+
+
+class StudentRegisterRequest(BaseModel):
+    """Full registration payload including nested parent, medical, and education data."""
+
+    # Core identity
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
     date_of_birth: date
     gender: Optional[str] = None
-    level: LevelCode
-    section: ClassSection
-    enrollment_year: int = Field(..., ge=2020, le=2100)
-    uses_transport: bool = False
-    transport_route: Optional[str] = None
-    homeroom_teacher_id: Optional[int] = None
+    is_active: bool = True
+    stream: Optional[str] = Field(default=None, max_length=50)  # e.g. "East"
 
-    @field_validator('date_of_birth')
+    # Placement
+    academic_level_id: int
+    class_id: int
+    transport_route_id: Optional[int] = None
+
+    # Nested sections
+    previous_education: Optional[PreviousEducationCreate] = None
+    medical_info: Optional[MedicalInformationCreate] = None
+    parents: List[ParentInfoCreate] = Field(default_factory=list)
+
+    @field_validator("date_of_birth")
     @classmethod
-    def dob_must_be_in_past(cls, v):
+    def dob_must_be_in_past(cls, v: date) -> date:
         if v >= date.today():
-            raise ValueError('Date of birth must be in the past')
-        age = date.today().year - v.year
-        if age < 2 or age > 7:
-            raise ValueError('Student age must be between 2 and 7 years')
+            raise ValueError("Date of birth must be in the past")
+        age_years = (date.today() - v).days / 365.25
+        if age_years < 2 or age_years > 10:
+            raise ValueError("Student age must be between 2 and 10 years")
         return v
 
-    @field_validator('transport_route')
-    @classmethod
-    def route_required_if_uses_transport(cls, v):
-        return v
+    @model_validator(mode="after")
+    def validate_parents(self) -> "StudentRegisterRequest":
+        parents = self.parents
+        if not parents:
+            raise ValueError("At least one parent or guardian is required")
 
-    @field_validator('enrollment_year')
-    @classmethod
-    def year_must_be_reasonable(cls, v):
-        current_year = date.today().year
-        if v < current_year - 1 or v > current_year + 1:
-            raise ValueError('Enrollment year must be within one year of current year')
-        return v
+        primary = [p for p in parents if p.is_primary]
+        if len(primary) != 1:
+            raise ValueError("Exactly one parent must be marked as primary")
 
-class StudentCreate(StudentBase):
-    pass
+        # Primary parent: all contact fields mandatory
+        p = primary[0]
+        missing = [f for f, v in [("email", p.email), ("phone", p.phone), ("id_document", p.id_document)] if not v]
+        if missing:
+            raise ValueError(f"Primary parent is missing: {', '.join(missing)}")
 
-class StudentRead(StudentBase):
+        # Non-primary parents: email, phone, and ID mandatory
+        for np in [x for x in parents if not x.is_primary]:
+            missing = [f for f, v in [("email", np.email), ("phone", np.phone), ("id_document", np.id_document)] if not v]
+            if missing:
+                raise ValueError(f"Additional parent '{np.full_name}' is missing: {', '.join(missing)}")
+
+        return self
+
+
+class StudentRead(BaseModel):
     id: int
     student_id: str
-    age_months: int
-    house: HouseName
+    first_name: str
+    last_name: str
+    date_of_birth: date
+    age_months: Optional[int] = None
+    gender: Optional[str] = None
+    is_active: bool
+    stream: Optional[str] = None
+    academic_level_id: Optional[int] = None
+    class_id: Optional[int] = None
+    transport_route_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StudentReadFull(StudentRead):
+    """Expanded read schema that includes nested relationships."""
+    previous_education: Optional[PreviousEducationRead] = None
+    medical_info: Optional[MedicalInformationRead] = None
+    parents: List[ParentInfoRead] = []
