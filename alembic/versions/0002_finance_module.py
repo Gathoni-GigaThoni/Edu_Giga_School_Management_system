@@ -7,6 +7,7 @@ Create Date: 2026-05-15 00:00:00.000000
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision: str = "0002"
 down_revision: Union[str, Sequence[str], None] = "0001"
@@ -30,41 +31,51 @@ def upgrade() -> None:
         END $$;
     """)
 
+    insp = inspect(op.get_bind())
+
     # 2. Create sibling_group table
-    op.create_table(
-        "sibling_group",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
+    if not insp.has_table("sibling_group"):
+        op.create_table(
+            "sibling_group",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("name", sa.String(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
 
     # 3. Alter student table: add sibling_group_id FK and is_reported_back
-    op.add_column(
-        "student",
-        sa.Column("sibling_group_id", sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_student_sibling_group_id",
-        "student",
-        "sibling_group",
-        ["sibling_group_id"],
-        ["id"],
-    )
-    op.add_column(
-        "student",
-        sa.Column(
-            "is_reported_back",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
+    student_cols = [c["name"] for c in insp.get_columns("student")]
+    if "sibling_group_id" not in student_cols:
+        op.add_column(
+            "student",
+            sa.Column("sibling_group_id", sa.Integer(), nullable=True),
+        )
+    student_fks = [fk["name"] for fk in insp.get_foreign_keys("student")]
+    if "fk_student_sibling_group_id" not in student_fks:
+        op.create_foreign_key(
+            "fk_student_sibling_group_id",
+            "student",
+            "sibling_group",
+            ["sibling_group_id"],
+            ["id"],
+        )
+    if "is_reported_back" not in student_cols:
+        op.add_column(
+            "student",
+            sa.Column(
+                "is_reported_back",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("false"),
+            ),
+        )
 
     # 4. Alter club table: add fee_amount
-    op.add_column(
-        "club",
-        sa.Column("fee_amount", sa.Numeric(12, 2), nullable=True),
-    )
+    club_cols = [c["name"] for c in insp.get_columns("club")]
+    if "fee_amount" not in club_cols:
+        op.add_column(
+            "club",
+            sa.Column("fee_amount", sa.Numeric(12, 2), nullable=True),
+        )
 
     # 5. Create fee_item table
     op.create_table(
