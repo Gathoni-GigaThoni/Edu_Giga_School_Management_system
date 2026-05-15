@@ -15,8 +15,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add RECEIPT to documentcategory enum
-    op.execute("ALTER TYPE documentcategory ADD VALUE IF NOT EXISTS 'receipt';")
+    # 1. Add RECEIPT to documentcategory enum (create the type first if it was never
+    #    created by 0001, e.g. when the DB was bootstrapped via create_all + stamp)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'documentcategory') THEN
+                CREATE TYPE documentcategory AS ENUM (
+                    'previous_education','medical_allergy','medical_chronic',
+                    'medical_vaccination','parent_id','other','receipt'
+                );
+            ELSE
+                ALTER TYPE documentcategory ADD VALUE IF NOT EXISTS 'receipt';
+            END IF;
+        END $$;
+    """)
 
     # 2. Create sibling_group table
     op.create_table(
