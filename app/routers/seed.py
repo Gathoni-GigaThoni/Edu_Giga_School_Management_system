@@ -28,6 +28,10 @@ from app.models.enums import (
     TermName, TransportDirection, ParentRelationship,
 )
 from app.services.student_id_generator import generate_student_id
+from app.models.fee_item import FeeItem
+from app.models.fee_schedule import FeeSchedule
+from app.models.sibling_group import SiblingGroup
+from app.models.enums import FeeCategory
 
 router = APIRouter(prefix="/seed", tags=["Seed"])
 
@@ -217,6 +221,67 @@ def seed_demo(session: Session = Depends(get_session)):  # noqa: C901
         quantity=2,
         term="Term 1 2026",
     ))
+
+    # ── Fee Items ────────────────────────────────────────────────────────────
+    from decimal import Decimal
+
+    fee_items_data = [
+        # TERMLY
+        {"name": "Tuition Fee",          "category": FeeCategory.TERMLY,  "default_amount": Decimal("35000")},
+        {"name": "Boarding Fee",         "category": FeeCategory.TERMLY,  "default_amount": Decimal("20000")},
+        {"name": "Transport Fee",        "category": FeeCategory.TERMLY,  "default_amount": Decimal("0")},
+        {"name": "Lunch Fee",            "category": FeeCategory.TERMLY,  "default_amount": Decimal("3000")},
+        {"name": "Field Trip Fee",       "category": FeeCategory.TERMLY,  "default_amount": Decimal("1500")},
+        {"name": "Club Fee",             "category": FeeCategory.TERMLY,  "default_amount": Decimal("0")},
+        {"name": "Late Payment Surcharge", "category": FeeCategory.TERMLY, "default_amount": Decimal("0")},
+        # YEARLY
+        {"name": "Medical Insurance",    "category": FeeCategory.YEARLY,  "default_amount": Decimal("2000")},
+        {"name": "Birthday Fee",         "category": FeeCategory.YEARLY,  "default_amount": Decimal("500")},
+        {"name": "Full Year Waiver",     "category": FeeCategory.YEARLY,  "default_amount": Decimal("0")},
+        # ONE_OFF
+        {"name": "Caution Fee",          "category": FeeCategory.ONE_OFF, "default_amount": Decimal("5000")},
+        {"name": "Registration Fee",     "category": FeeCategory.ONE_OFF, "default_amount": Decimal("3000")},
+        {"name": "Administration Fee",   "category": FeeCategory.ONE_OFF, "default_amount": Decimal("1500")},
+    ]
+
+    fee_item_map: dict[str, FeeItem] = {}
+    for fi_data in fee_items_data:
+        fi = FeeItem(**fi_data)
+        session.add(fi)
+        fee_item_map[fi_data["name"]] = fi
+    session.flush()
+
+    # ── Fee Schedules ─────────────────────────────────────────────────────────
+    # Link "Tuition Fee", "Registration Fee", and "Caution Fee" to each academic level
+    tuition_item = fee_item_map["Tuition Fee"]
+    reg_item = fee_item_map["Registration Fee"]
+    caution_item = fee_item_map["Caution Fee"]
+
+    for level_name, level_obj in levels.items():
+        session.add(FeeSchedule(
+            fee_item_id=tuition_item.id,
+            academic_level_id=level_obj.id,
+            amount=Decimal("35000"),
+        ))
+        session.add(FeeSchedule(
+            fee_item_id=reg_item.id,
+            academic_level_id=level_obj.id,
+            amount=Decimal("3000"),
+        ))
+        session.add(FeeSchedule(
+            fee_item_id=caution_item.id,
+            academic_level_id=level_obj.id,
+            amount=Decimal("5000"),
+        ))
+    session.flush()
+
+    # ── Sibling Group demo ────────────────────────────────────────────────────
+    sibling_group = SiblingGroup(name="Family of Ochieng")
+    session.add(sibling_group)
+    session.flush()
+
+    liam.sibling_group_id = sibling_group.id
+    session.add(liam)
 
     session.commit()
 

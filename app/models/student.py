@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.models.discipline import DisciplinaryLog
     from app.models.parent_guardian import ParentGuardian
     from app.models.medical import MedicalHistory
+    from app.models.sibling_group import SiblingGroup
 
 
 class Student(SQLModel, table=True):
@@ -44,12 +45,15 @@ class Student(SQLModel, table=True):
     academic_level_id: Optional[int] = Field(default=None, foreign_key="academic_level.id")
     class_id: Optional[int] = Field(default=None, foreign_key="school_class.id")
     transport_route_id: Optional[int] = Field(default=None, foreign_key="route.id")
+    sibling_group_id: Optional[int] = Field(default=None, foreign_key="sibling_group.id")
+    is_reported_back: bool = Field(default=False)
 
     # Primary relationships
     academic_level: Optional["AcademicLevel"] = Relationship(back_populates="students")
     school_class: Optional["SchoolClass"] = Relationship(back_populates="students")
     transport_route: Optional["Route"] = Relationship()
     student_routes: List["StudentRoute"] = Relationship(back_populates="student")
+    sibling_group: Optional["SiblingGroup"] = Relationship(back_populates="students")
     previous_education: Optional["PreviousEducation"] = Relationship(back_populates="student")
     medical_info: Optional["MedicalInformation"] = Relationship(back_populates="student")
     parents: List["ParentInfo"] = Relationship(back_populates="student")

@@ -63,3 +63,17 @@ class DocumentCategory(str, Enum):
     MEDICAL_VACCINATION = "medical_vaccination"
     PARENT_ID = "parent_id"
     OTHER = "other"
+    RECEIPT = "receipt"
+
+
+class FeeCategory(str, Enum):
+    TERMLY = "TERMLY"
+    YEARLY = "YEARLY"
+    ONE_OFF = "ONE_OFF"
+
+
+class PaymentMethod(str, Enum):
+    CASH = "CASH"
+    BANK_TRANSFER = "BANK_TRANSFER"
+    CHEQUE = "CHEQUE"
+    MPESA = "MPESA"

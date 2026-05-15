@@ -4,6 +4,7 @@
 from app.models.enums import (
     StaffRole, ClearanceLevel, SkillRating, AttendanceStatus, InfractionSeverity,
     TermName, TransportDirection, ParentRelationship, DocumentCategory,
+    FeeCategory, PaymentMethod,
 )
 from app.models.team import Team
 from app.models.skill import Skill
@@ -13,6 +14,8 @@ from app.models.academic_year import AcademicYear
 from app.models.route import Route
 from app.models.term import Term
 from app.models.class_ import SchoolClass
+# SiblingGroup must be imported BEFORE Student because Student has sibling_group_id FK
+from app.models.sibling_group import SiblingGroup
 from app.models.student import Student
 from app.models.parent_guardian import ParentGuardian      # legacy
 from app.models.medical import MedicalHistory              # legacy
@@ -26,3 +29,9 @@ from app.models.medical_information import MedicalInformation
 from app.models.parent_info import ParentInfo
 from app.models.document import Document
 from app.models.student_route import StudentRoute
+# Finance module models
+from app.models.fee_item import FeeItem
+from app.models.fee_schedule import FeeSchedule
+from app.models.student_fee import StudentFee
+from app.models.payment import Payment
+from app.models.payment_allocation import PaymentAllocation

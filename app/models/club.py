@@ -4,8 +4,10 @@ StudentClub is the join table implementing the many-to-many between Student and 
 Each StudentClub record tracks when the student joined and whether they are still active.
 """
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, Numeric
 from typing import Optional, List, TYPE_CHECKING
 from datetime import date
+from decimal import Decimal
 
 if TYPE_CHECKING:
     from app.models.student import Student
@@ -17,6 +19,7 @@ class Club(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: Optional[str] = None
+    fee_amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
 
     student_clubs: List["StudentClub"] = Relationship(back_populates="club")
 
