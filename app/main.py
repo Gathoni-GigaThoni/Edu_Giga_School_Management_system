@@ -13,7 +13,6 @@ from app.routers import dashboard
 from app.routers import discipline
 from app.routers import academic
 from app.routers import transport
-from app.routers import finance
 from app.exception_handlers import integrity_error_handler
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +48,6 @@ app.include_router(dashboard.router)
 app.include_router(discipline.router)
 app.include_router(academic.router)
 app.include_router(transport.router)
-app.include_router(finance.router)
 
 
 @app.get("/")
